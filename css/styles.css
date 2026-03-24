@@ -1,0 +1,225 @@
+:root {
+  --bg-color: #f8f9fa;
+  --text-main: #212529;
+  --text-muted: #6c757d;
+  --accent-color: #000000;
+  --embed-bg: #ffffff;
+  --border-color: #dee2e6;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Layout Constraints --- */
+#app-wrapper {
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  position: relative;
+  padding-bottom: 70px; /* Space for persistent bottom nav */
+  box-shadow: 0 0 20px rgba(0,0,0,0.05); /* Subtle depth on desktop */
+}
+
+/* --- Global Header --- */
+#app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background-color: var(--embed-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+#app-header h2 { 
+  margin: 0; 
+  font-size: 1.2rem; 
+  font-weight: 700;
+}
+
+#btn-privacy-toggle {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: auto;
+}
+
+/* --- Privacy Mode --- */
+.currency-blur {
+  filter: blur(5px);
+  transition: filter 0.2s ease;
+}
+
+/* --- UI Components --- */
+.embed-block {
+  background-color: var(--embed-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  margin: 16px 20px;
+  max-height: 564px;
+  overflow: hidden; /* Strict constraint: No internal scrollbars */
+}
+
+.embed-block h3, .embed-block h4 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: var(--text-main);
+}
+
+.balance-card {
+  text-align: center;
+  padding: 30px 20px;
+  background-color: var(--embed-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.balance-card h3 { 
+  margin: 0; 
+  color: var(--text-muted); 
+  font-size: 0.85rem; 
+  text-transform: uppercase; 
+  letter-spacing: 1px; 
+}
+
+.balance-card h1 { 
+  margin: 10px 0 0; 
+  font-size: 2.5rem; 
+  font-weight: 700;
+}
+
+/* --- Progress Bar --- */
+.progress-bar-container {
+  width: 100%;
+  height: 8px;
+  background-color: var(--bg-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: var(--accent-color);
+  width: 0%; /* Adjusted via JS */
+  transition: width 0.3s ease;
+}
+
+/* --- Forms & Buttons --- */
+input, select, button {
+  font-family: inherit;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+input[type="email"], 
+input[type="password"], 
+input[type="text"], 
+input[type="number"], 
+select {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+}
+
+button {
+  background-color: var(--accent-color);
+  color: #fff;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  width: 100%;
+  transition: opacity 0.2s ease;
+}
+
+button:hover { opacity: 0.85; }
+button.danger-btn { background-color: #dc3545; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 20px 0;
+}
+
+/* --- Floating Action Button (FAB) --- */
+.fab {
+  position: fixed;
+  bottom: 80px;
+  right: calc(50% - 450px + 20px); /* Keeps it inside the 900px wrapper on desktop */
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background-color: var(--accent-color);
+  color: #fff;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  z-index: 90;
+  padding: 0;
+}
+
+@media (max-width: 900px) {
+  .fab { right: 20px; }
+}
+
+/* --- Navigation --- */
+#bottom-nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  background-color: var(--embed-bg);
+  border-top: 1px solid var(--border-color);
+  padding: 10px 0;
+  z-index: 100;
+}
+
+.nav-btn {
+  background: none;
+  color: var(--text-main);
+  font-size: 1.5rem;
+  border: none;
+  width: auto;
+  padding: 8px 16px;
+  opacity: 0.4;
+}
+
+.nav-btn.active { opacity: 1; }
+
+/* --- Auth Screen Specific --- */
+.auth-container {
+  max-width: 400px;
+  margin: 80px auto;
+  padding: 20px;
+  text-align: center;
+}
+
+.admin-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.admin-check input {
+  width: auto;
+  margin-right: 8px;
+  margin-bottom: 0;
+}
