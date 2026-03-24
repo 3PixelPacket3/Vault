@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vault</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="app-wrapper">
+        
+        <section id="auth-screen" class="view active">
+            <div class="auth-container">
+                <h1>Vault</h1>
+                <p>Secure Personal Finance</p>
+                <form id="login-form">
+                    <input type="email" id="auth-email" placeholder="Email" required>
+                    <input type="password" id="auth-password" placeholder="Password" required>
+                    <div class="admin-check">
+                        <input type="checkbox" id="auth-is-admin">
+                        <label for="auth-is-admin">Admin Registration</label>
+                    </div>
+                    <input type="password" id="auth-admin-code" placeholder="Admin Code (Optional)" style="display:none;">
+                    <button type="submit" id="btn-login">Login / Sign Up</button>
+                </form>
+                <hr>
+                <button id="btn-google-login">Sign in with Google</button>
+            </div>
+        </section>
+
+        <section id="main-app" class="view" style="display: none;">
+            
+            <header id="app-header">
+                <div class="header-left">
+                    <h2>Vault</h2>
+                </div>
+                <div class="header-right">
+                    <button id="btn-privacy-toggle" title="Toggle Privacy Mode">👁️</button>
+                </div>
+            </header>
+
+            <main id="view-dashboard" class="tab-content active">
+                <div class="balance-card">
+                    <h3>Current Net Balance</h3>
+                    <h1 id="net-balance" class="currency">$0.00</h1>
+                </div>
+                
+                <div class="embed-block">
+                    <h3>Monthly Spend</h3>
+                    <div class="progress-bar-container">
+                        <div id="spend-progress" class="progress-bar"></div>
+                    </div>
+                </div>
+
+                <div class="embed-block">
+                    <h3>Recent Activity</h3>
+                    <div id="recent-activity">
+                        </div>
+                </div>
+
+                <button id="fab-add-transaction" class="fab">+</button>
+            </main>
+
+            <main id="view-plan" class="tab-content" style="display: none;">
+                <div class="balance-card">
+                    <h3>Left to Budget</h3>
+                    <h1 id="left-to-budget" class="currency">$0.00</h1>
+                </div>
+                <div class="embed-block" id="budget-categories">
+                    </div>
+            </main>
+
+            <main id="view-ledger" class="tab-content" style="display: none;">
+                <div class="embed-block">
+                    <input type="text" id="ledger-search" placeholder="Search transactions...">
+                    <div id="ledger-list">
+                        </div>
+                </div>
+            </main>
+
+            <main id="view-settings" class="tab-content" style="display: none;">
+                <div class="embed-block">
+                    <h3>Settings</h3>
+                    <button id="btn-export-csv">Export Data (CSV)</button>
+                    <hr>
+                    <h4>Vault Link</h4>
+                    <input type="text" id="vault-link-uid" placeholder="Partner UID">
+                    <button id="btn-link-account">Link Account</button>
+                    <hr>
+                    <div id="admin-console" style="display: none;">
+                        <h4>Admin Console</h4>
+                        <button id="btn-admin-reset">Global System Reset</button>
+                    </div>
+                    <hr>
+                    <button id="btn-logout" class="danger-btn">Secure Logout</button>
+                </div>
+            </main>
+
+            <nav id="bottom-nav">
+                <button class="nav-btn active" data-target="view-dashboard">🏠</button>
+                <button class="nav-btn" data-target="view-plan">🎯</button>
+                <button class="nav-btn" data-target="view-ledger">📖</button>
+                <button class="nav-btn" data-target="view-settings">⚙️</button>
+            </nav>
+        </section>
+    </div>
+
+    <div id="transaction-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:#fff; padding:20px; border-radius:8px; width:90%; max-width:400px; box-sizing: border-box;">
+            <h3 style="margin-top:0;">New Transaction</h3>
+            <form id="form-transaction">
+                <input type="number" id="trans-amount" placeholder="Amount" step="0.01" required style="width:100%; margin-bottom:10px; padding:10px; box-sizing:border-box;">
+                <select id="trans-type" style="width:100%; margin-bottom:10px; padding:10px; box-sizing:border-box;">
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                </select>
+                <input type="text" id="trans-merchant" placeholder="Merchant/Source" required style="width:100%; margin-bottom:10px; padding:10px; box-sizing:border-box;">
+                <input type="text" id="trans-category" placeholder="Category" required style="width:100%; margin-bottom:10px; padding:10px; box-sizing:border-box;">
+                <button type="submit" style="width:100%; margin-bottom:10px; padding:10px; background:#000; color:#fff; border:none; border-radius:4px;">Save</button>
+                <button type="button" id="btn-close-modal" style="width:100%; padding:10px; background:#f0f0f0; border:none; border-radius:4px;">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
