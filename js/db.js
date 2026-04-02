@@ -1,133 +1,133 @@
 import { db } from './firebase-config.js';
 import {
-    collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, getDoc, doc
+  collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp,
+  getDoc, doc, arrayUnion, updateDoc
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
 let currentUserUid = null;
 let sharedWithUids = [];
+let monthlyLimit = 3000;
+let currency = 'USD';
 
-// --- DOM Elements ---
 const formTransaction = document.getElementById('form-transaction');
 const transactionModal = document.getElementById('transaction-modal');
 const recentActivityContainer = document.getElementById('recent-activity');
 const netBalanceDisplay = document.getElementById('net-balance');
+const monthIncomeDisplay = document.getElementById('month-income');
+const monthExpenseDisplay = document.getElementById('month-expense');
 const spendProgressBar = document.getElementById('spend-progress');
+const spendProgressLabel = document.getElementById('spend-progress-label');
 
-// --- Initialization ---
-// Wait for auth.js to confirm the user is logged in
+const fmt = (amount) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
+
 window.addEventListener('vault-authenticated', async (e) => {
-    currentUserUid = e.detail.uid;
+  currentUserUid = e.detail.uid;
+  currency = e.detail.preferences?.currency || 'USD';
+  monthlyLimit = e.detail.preferences?.monthlySpendLimit || 3000;
 
-    // Fetch user profile to get vaultLink (Shared Access Support)
-    const userDoc = await getDoc(doc(db, "users", currentUserUid));
-    if (userDoc.exists()) {
-        const vaultLink = userDoc.data().vaultLink;
-        if (vaultLink) {
-            sharedWithUids.push(vaultLink);
-        }
-    }
-
-    // Begin syncing data
-    setupRealtimeListeners();
+  sharedWithUids = [];
+  const userDoc = await getDoc(doc(db, 'users', currentUserUid));
+  if (userDoc.exists() && userDoc.data().vaultLink) sharedWithUids.push(userDoc.data().vaultLink);
+  setupRealtimeListeners();
 });
 
-// --- Write: Add New Transaction ---
+window.addEventListener('vault-preferences-updated', (e) => {
+  currency = e.detail.currency || currency;
+  monthlyLimit = Number(e.detail.monthlySpendLimit || monthlyLimit);
+});
+
 formTransaction.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  const amount = parseFloat(document.getElementById('trans-amount').value);
+  const type = document.getElementById('trans-type').value;
+  const merchant = document.getElementById('trans-merchant').value.trim();
+  const category = document.getElementById('trans-category').value.trim();
+  const notes = document.getElementById('trans-notes').value.trim();
+  const selectedDate = document.getElementById('trans-date').value;
 
-    const amount = parseFloat(document.getElementById('trans-amount').value);
-    const type = document.getElementById('trans-type').value;
-    const merchant = document.getElementById('trans-merchant').value;
-    const category = document.getElementById('trans-category').value;
+  if (!currentUserUid || !merchant || !category || !Number.isFinite(amount) || amount <= 0) {
+    return alert('Please provide valid transaction details.');
+  }
 
-    try {
-        await addDoc(collection(db, "transactions"), {
-            ownerId: currentUserUid,
-            sharedWith: sharedWithUids,
-            amount: amount,
-            type: type,
-            merchant: merchant,
-            category: category,
-            date: serverTimestamp(),
-            tags: []
-        });
+  try {
+    await addDoc(collection(db, 'transactions'), {
+      ownerId: currentUserUid,
+      sharedWith: sharedWithUids,
+      amount,
+      type,
+      merchant,
+      category,
+      notes,
+      date: selectedDate ? new Date(`${selectedDate}T12:00:00`) : serverTimestamp(),
+      createdAt: serverTimestamp(),
+      tags: []
+    });
 
-        // Reset form and close modal; onSnapshot will handle the UI update
-        formTransaction.reset();
-        transactionModal.style.display = 'none';
-    } catch (error) {
-        console.error("Error adding transaction: ", error);
-        alert("Failed to save transaction. Ensure you have network connectivity.");
+    if (sharedWithUids.length) {
+      await Promise.all(sharedWithUids.map(async uid => {
+        const u = doc(db, 'users', uid);
+        await updateDoc(u, { linkedBy: arrayUnion(currentUserUid) });
+      }));
     }
+
+    formTransaction.reset();
+    transactionModal.style.display = 'none';
+  } catch (error) {
+    console.error(error);
+    alert('Failed to save transaction.');
+  }
 });
 
-// --- Read: Cloud-First Realtime Sync ---
 function setupRealtimeListeners() {
-    // Query transactions owned by the user, ordered by newest first
-    const q = query(
-        collection(db, "transactions"),
-        where("ownerId", "==", currentUserUid),
-        orderBy("date", "desc")
-    );
+  const q = query(collection(db, 'transactions'), where('ownerId', '==', currentUserUid), orderBy('date', 'desc'));
 
-    onSnapshot(q, (snapshot) => {
-        let netBalance = 0;
-        let monthlySpend = 0;
-        const currentMonth = new Date().getMonth();
-        
-        recentActivityContainer.innerHTML = ''; // Clear stale data
-        let count = 0;
+  onSnapshot(q, (snapshot) => {
+    let net = 0;
+    let monthlyIncome = 0;
+    let monthlyExpense = 0;
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
 
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            
-            // 1. Calculate Balances
-            if (data.type === 'income') {
-                netBalance += data.amount;
-            } else if (data.type === 'expense') {
-                netBalance -= data.amount;
-                
-                // If the transaction happened this month, add to Monthly Spend tracker
-                if (data.date && data.date.toDate().getMonth() === currentMonth) {
-                    monthlySpend += data.amount;
-                }
-            }
+    recentActivityContainer.innerHTML = '';
+    let count = 0;
 
-            // 2. Render Top 5 Recent Activities for the Dashboard Widget
-            if (count < 5) {
-                const activityEl = document.createElement('div');
-                activityEl.style.display = 'flex';
-                activityEl.style.justifyContent = 'space-between';
-                activityEl.style.padding = '12px 0';
-                activityEl.style.borderBottom = '1px solid var(--border-color)';
-                
-                const amountColor = data.type === 'expense' ? '#dc3545' : '#28a745';
-                const amountPrefix = data.type === 'expense' ? '-' : '+';
-                
-                activityEl.innerHTML = `
-                    <span style="font-weight: 500;">${data.merchant} <br><small style="color: var(--text-muted); font-weight: normal;">${data.category}</small></span>
-                    <span class="currency" style="color: ${amountColor}; font-weight: 700;">${amountPrefix}$${data.amount.toFixed(2)}</span>
-                `;
-                recentActivityContainer.appendChild(activityEl);
-                count++;
-            }
-        });
+    snapshot.forEach((d) => {
+      const data = d.data();
+      if (data.type === 'income') net += data.amount;
+      if (data.type === 'expense') net -= data.amount;
 
-        if (count === 0) {
-            recentActivityContainer.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No recent activity.</p>';
-        }
+      const txDate = data.date?.toDate ? data.date.toDate() : (data.date ? new Date(data.date) : null);
+      if (txDate && txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear) {
+        if (data.type === 'income') monthlyIncome += data.amount;
+        if (data.type === 'expense') monthlyExpense += data.amount;
+      }
 
-        // 3. Update Dashboard UI
-        netBalanceDisplay.textContent = `$${netBalance.toFixed(2)}`;
-        
-        // Update Progress Bar (Default visual limit set to $3000 for Dashboard; logic expands in plan.js)
-        const spendPercentage = Math.min((monthlySpend / 3000) * 100, 100);
-        spendProgressBar.style.width = `${spendPercentage}%`;
-        spendProgressBar.style.backgroundColor = spendPercentage >= 90 ? '#dc3545' : 'var(--accent-color)';
-
-        // 4. Re-enforce Privacy Mode if active
-        if (localStorage.getItem('vault_privacy_mode') === 'true') {
-            document.querySelectorAll('.currency').forEach(el => el.classList.add('currency-blur'));
-        }
+      if (count < 7) {
+        const activityEl = document.createElement('div');
+        activityEl.className = 'transaction-row';
+        const isExpense = data.type === 'expense';
+        activityEl.innerHTML = `
+          <span><strong>${data.merchant}</strong><br><small>${data.category}</small></span>
+          <span class="currency" style="color:${isExpense ? '#dc3545' : '#28a745'};font-weight:700;">${isExpense ? '-' : '+'}${fmt(data.amount)}</span>
+        `;
+        recentActivityContainer.appendChild(activityEl);
+        count++;
+      }
     });
+
+    if (!count) recentActivityContainer.innerHTML = '<p style="color:var(--text-muted);text-align:center;">No recent activity.</p>';
+
+    netBalanceDisplay.textContent = fmt(net);
+    monthIncomeDisplay.textContent = fmt(monthlyIncome);
+    monthExpenseDisplay.textContent = fmt(monthlyExpense);
+
+    const pct = Math.min((monthlyExpense / monthlyLimit) * 100, 100);
+    spendProgressBar.style.width = `${pct}%`;
+    spendProgressBar.style.backgroundColor = pct >= 90 ? '#dc3545' : 'var(--accent-color)';
+    spendProgressLabel.textContent = `${fmt(monthlyExpense)} of ${fmt(monthlyLimit)} limit`;
+
+    if (localStorage.getItem('vault_privacy_mode') === 'true') {
+      document.querySelectorAll('.currency').forEach(el => el.classList.add('currency-blur'));
+    }
+  });
 }
