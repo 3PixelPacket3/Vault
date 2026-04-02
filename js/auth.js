@@ -1,19 +1,15 @@
 import { auth, db } from './firebase-config.js';
 import {
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    GoogleAuthProvider,
-    signInWithPopup,
-    onAuthStateChanged,
-    signOut
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
+  onAuthStateChanged,
+  signOut,
+  sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
-import {
-    doc,
-    setDoc,
-    getDoc
-} from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
-// --- DOM Elements ---
 const authScreen = document.getElementById('auth-screen');
 const mainApp = document.getElementById('main-app');
 const loginForm = document.getElementById('login-form');
@@ -22,121 +18,114 @@ const adminCodeInput = document.getElementById('auth-admin-code');
 const btnGoogleLogin = document.getElementById('btn-google-login');
 const btnLogout = document.getElementById('btn-logout');
 const adminConsole = document.getElementById('admin-console');
+const btnForgotPassword = document.getElementById('btn-forgot-password');
+const welcomeEmail = document.getElementById('welcome-email');
+const createAccountCheck = document.getElementById('auth-create-account');
 
-// --- Admin UI Toggle ---
-// Show the admin code input only if the checkbox is checked
 adminCheck.addEventListener('change', (e) => {
-    adminCodeInput.style.display = e.target.checked ? 'block' : 'none';
+  adminCodeInput.style.display = e.target.checked ? 'block' : 'none';
 });
 
-// --- Email/Password Form Handler ---
+const defaultPreferences = {
+  theme: 'light',
+  privacyModeDefault: false,
+  currency: 'USD',
+  monthlySpendLimit: 3000
+};
+
+async function ensureUserDoc(user, isAdmin = false) {
+  const userRef = doc(db, 'users', user.uid);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) {
+    await setDoc(userRef, {
+      email: user.email,
+      isAdmin,
+      vaultLink: '',
+      createdAt: new Date().toISOString(),
+      preferences: defaultPreferences
+    });
+    return { isAdmin, preferences: defaultPreferences, email: user.email };
+  }
+
+  const data = userSnap.data();
+  if (!data.preferences) {
+    await setDoc(userRef, { preferences: defaultPreferences }, { merge: true });
+    data.preferences = defaultPreferences;
+  }
+  return data;
+}
+
 loginForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('auth-email').value;
-    const password = document.getElementById('auth-password').value;
-    const wantsAdmin = adminCheck.checked;
-    const adminCode = adminCodeInput.value;
+  e.preventDefault();
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const wantsAdmin = adminCheck.checked;
+  const adminCode = adminCodeInput.value;
 
-    try {
-        // 1. Attempt standard login
-        await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-        // 2. If user doesn't exist, handle sign-up
-        if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
-
-                // Validate Admin Code (4535521)
-                let isAdmin = false;
-                if (wantsAdmin && adminCode === '4535521') {
-                    isAdmin = true;
-                } else if (wantsAdmin && adminCode !== '4535521') {
-                    alert("Invalid Admin Code. Registering as standard user.");
-                }
-
-                // Create the required Firestore user schema
-                await setDoc(doc(db, "users", user.uid), {
-                    email: user.email,
-                    isAdmin: isAdmin,
-                    vaultLink: "",
-                    preferences: {
-                        theme: "light",
-                        privacyModeDefault: false
-                    }
-                });
-            } catch (signupError) {
-                alert("Sign Up Error: " + signupError.message);
-            }
-        } else {
-            alert("Login Error: " + error.message);
-        }
-    }
-});
-
-// --- Google OAuth Handler ---
-btnGoogleLogin.addEventListener('click', async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-        
-        // Check if this is a first-time Google login by looking for their Firestore doc
-        const userDocRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        if (!userDoc.exists()) {
-            await setDoc(userDocRef, {
-                email: user.email,
-                isAdmin: false, // Standard user by default for OAuth
-                vaultLink: "",
-                preferences: { theme: "light", privacyModeDefault: false }
-            });
-        }
-    } catch (error) {
-        alert("Google Sign-In Error: " + error.message);
-    }
-});
-
-// --- Secure Logout ---
-btnLogout.addEventListener('click', async () => {
-    try {
-        await signOut(auth);
-    } catch (error) {
-        console.error("Logout Error:", error);
-    }
-});
-
-// --- Global Auth State Observer ---
-// This acts as our routing layer and UI gatekeeper
-onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        // Hide Auth, Show Main App
-        authScreen.style.display = 'none';
-        authScreen.classList.remove('active');
-        mainApp.style.display = 'block';
-        mainApp.classList.add('active');
-        
-        // Fetch user document to check Admin status
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists() && userDoc.data().isAdmin) {
-            adminConsole.style.display = 'block'; // Reveal Admin Tools for authorized users
-        } else {
-            adminConsole.style.display = 'none';
-        }
-        
-        // Dispatch a custom event so the rest of the app knows it can start fetching data
-        window.dispatchEvent(new CustomEvent('vault-authenticated', { detail: { uid: user.uid } }));
+  try {
+    if (createAccountCheck.checked) {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const isAdmin = wantsAdmin && adminCode === '4535521';
+      if (wantsAdmin && !isAdmin) alert('Invalid Admin Code. Creating standard user.');
+      await ensureUserDoc(userCredential.user, isAdmin);
     } else {
-        // Reset UI to login state
-        authScreen.style.display = 'block';
-        authScreen.classList.add('active');
-        mainApp.style.display = 'none';
-        mainApp.classList.remove('active');
-        adminConsole.style.display = 'none';
-        
-        // Clear any form inputs
-        loginForm.reset();
-        adminCodeInput.style.display = 'none';
+      await signInWithEmailAndPassword(auth, email, password);
     }
+  } catch (error) {
+    alert(`Authentication error: ${error.message}`);
+  }
+});
+
+btnGoogleLogin.addEventListener('click', async () => {
+  try {
+    const result = await signInWithPopup(auth, new GoogleAuthProvider());
+    await ensureUserDoc(result.user, false);
+  } catch (error) {
+    alert('Google Sign-In Error: ' + error.message);
+  }
+});
+
+btnForgotPassword.addEventListener('click', async () => {
+  const email = document.getElementById('auth-email').value.trim();
+  if (!email) return alert('Enter your email first, then click Forgot password.');
+  try {
+    await sendPasswordResetEmail(auth, email);
+    alert('Password reset email sent.');
+  } catch (error) {
+    alert(`Failed to send reset email: ${error.message}`);
+  }
+});
+
+btnLogout.addEventListener('click', async () => {
+  try { await signOut(auth); } catch (error) { console.error(error); }
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    authScreen.style.display = 'none';
+    mainApp.style.display = 'block';
+    const profile = await ensureUserDoc(user, false);
+    adminConsole.style.display = profile.isAdmin ? 'block' : 'none';
+    welcomeEmail.textContent = user.email;
+
+    window.dispatchEvent(new CustomEvent('vault-preferences-updated', {
+      detail: profile.preferences || defaultPreferences
+    }));
+
+    window.dispatchEvent(new CustomEvent('vault-authenticated', {
+      detail: {
+        uid: user.uid,
+        isAdmin: !!profile.isAdmin,
+        email: user.email,
+        preferences: profile.preferences || defaultPreferences
+      }
+    }));
+  } else {
+    authScreen.style.display = 'block';
+    mainApp.style.display = 'none';
+    adminConsole.style.display = 'none';
+    welcomeEmail.textContent = '';
+    loginForm.reset();
+    adminCodeInput.style.display = 'none';
+  }
 });
